@@ -1,0 +1,100 @@
+import math
+
+import torch.nn as nn
+import torch.utils.model_zoo as model_zoo
+import torch.nn.init as init
+
+
+__all__ = [
+    'vgg13_no_bn','vgg19_no_bn'
+]
+
+
+model_urls = {
+    'vgg11': 'https://download.pytorch.org/models/vgg11-bbd30ac9.pth',
+    'vgg13': 'https://download.pytorch.org/models/vgg13-c768596a.pth',
+    'vgg16': 'https://download.pytorch.org/models/vgg16-397923af.pth',
+    'vgg19': 'https://download.pytorch.org/models/vgg19-dcbb9e9d.pth',
+}
+
+
+class VGG(nn.Module):
+
+    def __init__(self, features, num_classes=1000):
+        super(VGG, self).__init__()
+        self.classes = num_classes
+        self.features = features
+        self.classifier = nn.Linear(512, num_classes)
+        self.init()
+
+
+    def forward(self, x):
+        x = self.features(x)
+        if self.classes != 10 and self.classes != 100:
+            x = nn.AvgPool2d(4)(x)
+        else:
+            x = nn.AvgPool2d(2)(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
+
+
+    def init(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                n = m.weight.size(1)
+                m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
+
+
+def make_layers(cfg, batch_norm=False):
+    layers = []
+    in_channels = 3
+    for v in cfg:
+        if v == 'M':
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+        else:
+            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1, bias=False)
+            if batch_norm:
+                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=False)]
+            else:
+                layers += [conv2d, nn.ReLU(inplace=False)]
+            in_channels = v
+    return nn.Sequential(*layers)
+
+
+cfg = {
+    'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512],
+    'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512],
+    'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512],
+    'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512],
+}
+
+   
+def vgg13_no_bn(**kwargs):
+    """VGG 13-layer model (configuration "B")
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = VGG(make_layers(cfg['B']), **kwargs)
+    return model    
+
+
+def vgg19_no_bn(**kwargs):
+    """VGG 19-layer model (configuration "E")
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = VGG(make_layers(cfg['E']), **kwargs)
+    return model
+
+ 
